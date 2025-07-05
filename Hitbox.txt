@@ -15,5 +15,3 @@ for _, playerInFolder in ipairs(playersFolder:GetChildren()) do
         end
     end
 end
-    end,
-})
