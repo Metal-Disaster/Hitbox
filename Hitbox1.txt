@@ -1,0 +1,107 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local player = Players.LocalPlayer
+
+-- Variables de control
+local originalSizes = {}
+local active = false
+local heartbeatConnection = nil
+local lastCharacterState = false
+
+-- Función de validación mejorada
+local function ValidateCharacter()
+    local charFolder = workspace:FindFirstChild("LocalPlayer")
+    if not charFolder then return false end
+    
+    local characterFolder = charFolder:FindFirstChild("CharacterFolder")
+    if not characterFolder then return false end
+    
+    local characterName = characterFolder:FindFirstChild(player.Name)
+    if not characterName then return false end
+    
+    -- Verificar ambos personajes requeridos (nota: "yuri" en minúscula)
+    local hasSonic = characterName:FindFirstChild("sonic.exe")
+    local hasYuri = characterName:FindFirstChild("yuri")
+    
+    return hasSonic and hasYuri
+end
+
+-- Función principal de modificación
+local function ModifyHitboxes(enable)
+    local characterValid = ValidateCharacter()
+    
+    -- Obtener el módulo de hitboxes
+    local hitboxModule = workspace:FindFirstChild("gameInstance")
+    if not hitboxModule then return end
+    hitboxModule = hitboxModule:FindFirstChild("hitBoxModule")
+    if not hitboxModule then return end
+    
+    local playersFolder = hitboxModule:FindFirstChild("Players")
+    if not playersFolder then return end
+
+    -- Procesar cada jugador
+    for _, playerInFolder in ipairs(playersFolder:GetChildren()) do
+        local hitFolder = playerInFolder:FindFirstChild("HitFolder")
+        if hitFolder then
+            local collision = hitFolder:FindFirstChild("collision")
+            if collision then
+                if enable and characterValid then
+                    -- Guardar tamaño original si no existe
+                    if not originalSizes[playerInFolder.Name] then
+                        originalSizes[playerInFolder.Name] = collision.Size
+                    end
+                    -- Aplicar nuevo tamaño (20, 15, 20 como solicitaste)
+                    collision.Size = Vector3.new(20, 15, 20)
+                elseif originalSizes[playerInFolder.Name] then
+                    -- Restaurar tamaño original si existe
+                    collision.Size = originalSizes[playerInFolder.Name]
+                end
+            end
+        end
+    end
+end
+
+-- Loop de actualización con detección de cambios de personaje
+local function MainLoop()
+    local currentCharacterState = ValidateCharacter()
+    
+    -- Detectar cambios en el estado del personaje
+    if lastCharacterState ~= currentCharacterState then
+        if currentCharacterState then
+            -- Acabamos de obtener los personajes requeridos
+            if active then
+                ModifyHitboxes(true)
+            end
+        else
+            -- Acabamos de perder los personajes requeridos
+            ModifyHitboxes(false)
+        end
+        lastCharacterState = currentCharacterState
+    end
+    
+    -- Solo modificar si está activo y con personajes válidos
+    if active and currentCharacterState then
+        ModifyHitboxes(true)
+    end
+end
+
+-- Función de control principal
+local function SetActive(state)
+    active = state
+    
+    if active then
+        -- Iniciar el sistema
+        heartbeatConnection = RunService.Heartbeat:Connect(MainLoop)
+        lastCharacterState = ValidateCharacter()
+        ModifyHitboxes(true)
+    else
+        -- Detener el sistema
+        if heartbeatConnection then
+            heartbeatConnection:Disconnect()
+            heartbeatConnection = nil
+        end
+        ModifyHitboxes(false)
+    end
+end
+
+return SetActive
