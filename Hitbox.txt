@@ -1,82 +1,19 @@
--- Hitbox Manager (Pastebin: https://pastebin.com/raw/XXXXX)
-local HitboxManager = {
-    OriginalSizes = {},
-    Active = false,
-    Connection = nil,
-    Attempts = 0,
-    MaxAttempts = 30
-}
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local playerName = player.Name
 
-function HitboxManager:Modify(size)
-    local hitboxModule = workspace:FindFirstChild("gameInstance") and workspace.gameInstance:FindFirstChild("hitBoxModule")
-    if not hitboxModule then return false, "No en ronda" end
-    
-    local playersFolder = hitboxModule:FindFirstChild("Players")
-    if not playersFolder then return false, "No hay jugadores" end
+-- Extensiones para modificar hitboxes de todos los jugadores
+local hitboxModule = workspace:WaitForChild("gameInstance"):WaitForChild("hitBoxModule")
+local playersFolder = hitboxModule:WaitForChild("Players")
 
-    local modified = 0
-    for _, player in ipairs(playersFolder:GetChildren()) do
-        local collision = player:FindFirstChild("HitFolder/collision")
+for _, playerInFolder in ipairs(playersFolder:GetChildren()) do
+    local hitFolder = playerInFolder:FindFirstChild("HitFolder")
+    if hitFolder then
+        local collision = hitFolder:FindFirstChild("collision")
         if collision then
-            if size then -- Modificar
-                if not self.OriginalSizes[player.Name] then
-                    self.OriginalSizes[player.Name] = collision.Size
-                end
-                collision.Size = size
-                modified += 1
-            else -- Restaurar
-                if self.OriginalSizes[player.Name] then
-                    collision.Size = self.OriginalSizes[player.Name]
-                    modified += 1
-                end
-            end
-        end
-    end
-    return true, modified > 0 and ("Hitboxes modificadas: "..modified) or "Nada cambiado"
-end
-
-function HitboxManager:Check()
-    if not self.Active then return end
-    
-    local success, result = self:Modify(Vector3.new(10, 15, 10))
-    
-    if success then
-        if result ~= "Nada cambiado" then
-            self.Attempts = 0 -- Reiniciar contador si hubo cambios
-        end
-    else
-        self.Attempts += 1
-        warn(result.." ("..self.Attempts.."/"..self.MaxAttempts..")")
-        
-        if self.Attempts >= self.MaxAttempts then
-            warn("Detenido: Máximos intentos alcanzados")
-            self:Stop()
+            collision.Size = Vector3.new(10, 15, 10)
         end
     end
 end
-
-function HitboxManager:Start()
-    self:Stop() -- Limpiar conexión anterior
-    self.Connection = game:GetService("RunService").Heartbeat:Connect(function()
-        self:Check()
-    end)
-end
-
-function HitboxManager:Stop()
-    if self.Connection then
-        self.Connection:Disconnect()
-        self.Connection = nil
-    end
-end
-
-function HitboxManager:Toggle(enable)
-    self.Active = enable
-    if enable then
-        self:Start()
-    else
-        self:Stop()
-        self:Modify() -- Restaurar originales
-    end
-end
-
-return HitboxManager
+    end,
+})
