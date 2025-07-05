@@ -1,80 +1,82 @@
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local player = Players.LocalPlayer
+-- Hitbox Manager (Pastebin: https://pastebin.com/raw/XXXXX)
+local HitboxManager = {
+    OriginalSizes = {},
+    Active = false,
+    Connection = nil,
+    Attempts = 0,
+    MaxAttempts = 30
+}
 
--- Verifica si existe la ruta LocalPlayer > CharacterFolder > [PlayerName] > "chara"
-local function ValidatePath()
-    local charFolder = workspace:FindFirstChild("LocalPlayer")
-    if not charFolder then return false end
+function HitboxManager:Modify(size)
+    local hitboxModule = workspace:FindFirstChild("gameInstance") and workspace.gameInstance:FindFirstChild("hitBoxModule")
+    if not hitboxModule then return false, "No en ronda" end
     
-    local characterFolder = charFolder:FindFirstChild("CharacterFolder")
-    if not characterFolder then return false end
-    
-    local characterName = characterFolder:FindFirstChild(player.Name)
-    if not characterName then return false end
-    
-    return characterName:FindFirstChild("chara") ~= nil
-end
+    local playersFolder = hitboxModule:FindFirstChild("Players")
+    if not playersFolder then return false, "No hay jugadores" end
 
--- Guarda los tamaños originales de los hitboxes
-local originalSizes = {}
-local active = false
-local heartbeatConnection = nil
-
--- Modifica o restaura los hitboxes
-local function ModifyHitboxes(enable)
-    if not ValidatePath() then return false end
-    
-    local hitboxModule = workspace:WaitForChild("gameInstance"):WaitForChild("hitBoxModule")
-    local playersFolder = hitboxModule:WaitForChild("Players")
-
-    for _, playerInFolder in ipairs(playersFolder:GetChildren()) do
-        local hitFolder = playerInFolder:FindFirstChild("HitFolder")
-        if hitFolder then
-            local collision = hitFolder:FindFirstChild("collision")
-            if collision then
-                if enable then
-                    -- Guarda el tamaño original si no está guardado
-                    if not originalSizes[playerInFolder.Name] then
-                        originalSizes[playerInFolder.Name] = collision.Size
-                    end
-                    -- Aplica el nuevo tamaño
-                    collision.Size = Vector3.new(10, 15, 10)
-                else
-                    -- Restaura el tamaño original si existe
-                    if originalSizes[playerInFolder.Name] then
-                        collision.Size = originalSizes[playerInFolder.Name]
-                    end
+    local modified = 0
+    for _, player in ipairs(playersFolder:GetChildren()) do
+        local collision = player:FindFirstChild("HitFolder/collision")
+        if collision then
+            if size then -- Modificar
+                if not self.OriginalSizes[player.Name] then
+                    self.OriginalSizes[player.Name] = collision.Size
+                end
+                collision.Size = size
+                modified += 1
+            else -- Restaurar
+                if self.OriginalSizes[player.Name] then
+                    collision.Size = self.OriginalSizes[player.Name]
+                    modified += 1
                 end
             end
         end
     end
-    return true
+    return true, modified > 0 and ("Hitboxes modificadas: "..modified) or "Nada cambiado"
 end
 
--- Loop para mantener los cambios activos
-local function MainLoop()
-    if active then
-        ModifyHitboxes(true)
-    end
-end
-
--- Función para activar/desactivar el sistema
-local function SetActive(state)
-    active = state
+function HitboxManager:Check()
+    if not self.Active then return end
     
-    if active then
-        -- Activa el loop continuo
-        heartbeatConnection = RunService.Heartbeat:Connect(MainLoop)
-        ModifyHitboxes(true)
-    else
-        -- Desactiva y restaura los valores originales
-        if heartbeatConnection then
-            heartbeatConnection:Disconnect()
-            heartbeatConnection = nil
+    local success, result = self:Modify(Vector3.new(10, 15, 10))
+    
+    if success then
+        if result ~= "Nada cambiado" then
+            self.Attempts = 0 -- Reiniciar contador si hubo cambios
         end
-        ModifyHitboxes(false)
+    else
+        self.Attempts += 1
+        warn(result.." ("..self.Attempts.."/"..self.MaxAttempts..")")
+        
+        if self.Attempts >= self.MaxAttempts then
+            warn("Detenido: Máximos intentos alcanzados")
+            self:Stop()
+        end
     end
 end
 
-return SetActive
+function HitboxManager:Start()
+    self:Stop() -- Limpiar conexión anterior
+    self.Connection = game:GetService("RunService").Heartbeat:Connect(function()
+        self:Check()
+    end)
+end
+
+function HitboxManager:Stop()
+    if self.Connection then
+        self.Connection:Disconnect()
+        self.Connection = nil
+    end
+end
+
+function HitboxManager:Toggle(enable)
+    self.Active = enable
+    if enable then
+        self:Start()
+    else
+        self:Stop()
+        self:Modify() -- Restaurar originales
+    end
+end
+
+return HitboxManager
